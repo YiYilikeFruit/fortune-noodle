@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>幸运饭桶大转盘</title>
+    <link rel="stylesheet" href="css/wheel.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>🍜 幸运饭桶大转盘</h1>
+      <p class="subtitle">压筹码 · 转起来 · 今天就吃它</p>
+    </header>
+
+    <main>
+      <!-- 区块一：转盘区（指针 + 权重比例扇区盘面） -->
+      <section id="wheel-section" aria-label="转盘区">
+        <div id="wheel-wrap">
+          <div id="wheel-pointer">▼</div>
+          <div id="wheel-disc"></div>
+        </div>
+      </section>
+
+      <!-- 区块二：轮次进度 -->
+      <section id="round-progress" aria-label="轮次进度"></section>
+
+      <!-- 区块三：筹码面板（候选选择 + 面额按钮 + 操作，JS 构建） -->
+      <section id="bet-panel" aria-label="压筹码面板"></section>
+
+      <!-- 区块四：结果卡（默认隐藏，末轮锁定后弹出） -->
+      <section id="result-card" hidden aria-label="结果卡"></section>
+
+      <!-- 区块五：收敛轨迹 -->
+      <section id="trace-section" aria-label="收敛轨迹">
+        <h2 class="section-title">收敛轨迹</h2>
+        <ol id="trace-list"></ol>
+      </section>
+    </main>
+
+    <footer>
+      <span id="seed-info"></span>
+      <span id="status-bar" role="status"></span>
+    </footer>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

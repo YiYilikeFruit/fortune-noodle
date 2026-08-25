@@ -1,0 +1,12 @@
+[
+  { "id": "noodle", "name": "热汤面", "color": "#e74c3c" },
+  { "id": "dumpling", "name": "饺子", "color": "#e67e22" },
+  { "id": "hotpot", "name": "火锅", "color": "#f39c12" },
+  { "id": "bbq", "name": "烧烤", "color": "#d35400" },
+  { "id": "burger", "name": "汉堡", "color": "#c0392b" },
+  { "id": "sushi", "name": "寿司", "color": "#16a085" },
+  { "id": "malatang", "name": "麻辣烫", "color": "#c0392b" },
+  { "id": "friedrice", "name": "炒饭", "color": "#27ae60" },
+  { "id": "pizza", "name": "披萨", "color": "#8e44ad" },
+  { "id": "riceNoodle", "name": "米线", "color": "#2980b9" }
+]

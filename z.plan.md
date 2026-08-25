@@ -5,7 +5,7 @@
 > 平台：小红书 App WebView 沙箱（Chromium ≥ 93），纯 HTML5 单页应用（HTML + CSS + JS），无后端、无构建
 > 技术约束：见 AGENTS.md 运行与验证（可用 CSS3 动画/过渡、Canvas 2D、SVG、fetch/localStorage、触摸/手势；禁用 WebGL/WASM/Workers/eval/new Function/document.write/内联事件/外链 JS）
 > 参考基准：AGENTS.md 结构（通用工具 → 配置 → 业务核心{旋转/下注/收敛/候选集管理} → 界面 → 静态数据）与代码规范；错误策略主线（不崩溃/不阻塞/有提示/能自愈）
-> 实施状态：📌 **完整 MVP 方案已确认（2026-08-26：权重极化式 + 含无头验证），待实施**
+> 实施状态：✅ **PL001 完整 MVP 已实施（V0.1.0.0，2026-08-26；权重极化式 + 无头验证 + 浏览器冒烟全通）**
 
 ---
 
@@ -60,21 +60,29 @@ _（内容暂空——永久豁免 / 条件豁免 / 价值权衡三级清单待�
 ```text
 fortune-noodle/
 ├── index.html              入口：挂载 UI + 引入模块
+├── package.json            node ESM 声明（type: module）
 ├── css/wheel.css           转盘 / 筹码面板 / 结果区样式
 ├── js/
 │   ├── random.js           可复现随机源（mulberry32 + seed 管理）
 │   ├── candidates.js       候选集加载 + 键名导入期校验（契约层）
 │   ├── weights.js          权重状态 + 极化更新
-│   ├── converge.js         多轮收敛编排（纯函数，无头可测）
-│   ├── wheel.js            停止角计算 + CSS3 旋转动画
-│   ├── bet.js              压筹码输入 + 预算校验
-│   ├── ui.js               DOM 绑定 / 渲染
-│   └── main.js             启动装配
+│   ├── converge.js         多轮收敛编排（createGame 两段式 + runGame 包装）
+│   ├── wheel.js            累计权重定位 + 扇区角换算 + CSS3 旋转动画
+│   ├── bet.js              压筹码输入校验 + 面额配置契约 + 向量转换
+│   ├── rules.js            规则配置契约（rounds/budget/k/chipDenominations/spin 校验）
+│   ├── ui.js               DOM 构建 / 刷新 / resolveSeedSource 纯函数
+│   └── main.js             启动装配与对局状态机
 ├── config/
-│   ├── candidates.json     候选集（菜品/餐厅类别，键名声明）
-│   └── rules.json          轮数 / 筹码预算 / 极化系数 k / 初始权重等
-├── .temp/                  verify_random.js / verify_candidates.js / verify_weights.js
-│                            / verify_converge.js / verify_wheel.js / verify_bet.js / run_all.py
+│   ├── candidates.json     候选集（10 项菜品/餐厅，键名与规则声明）
+│   ├── rules.json          轮数 / 筹码预算 / 极化系数 k / 面额 / 动画参数
+│   └── version.json        版本号单一来源（V0.1.0.0）
+├── .temp/                  无头验证资产
+│   ├── verify_random.js / verify_candidates.js / verify_weights.js
+│   ├── verify_converge.js / verify_wheel.js / verify_bet.js
+│   ├── verify_config.js / verify_ui.js / assert_lite.mjs
+│   ├── probe_pl001_core.js / probe_pl001_456.js / probe_pl001_789.js
+│   ├── probe_pl001_789.py / run_all.py
+│   └── ui_smoke_result.png / ui_smoke_wheel.png（冒烟截图）
 └── AGENTS.md / README.md / z.plan.md / x.progress.md / w.study.md / y.problem.md
 ```
 

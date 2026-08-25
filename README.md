@@ -1,5 +1,7 @@
 # 幸运饭桶大转盘
 
+> **V0.1.0.0** · 版本号唯一来源：[`config/version.json`](config/version.json)
+
 用大转盘 + 压筹码的趣味游戏，帮你决定今天吃什么。
 
 ## 项目简介
@@ -12,13 +14,13 @@
 
 小红书「小工具」——运行在小红书 App 的 WebView 沙箱内，纯 HTML5 单页应用。
 
-| 项 | 说明 |
-| --- | --- |
-| 平台 | 小红书（Xiaohongshu / RedBook） |
-| 容器 | WebView（Chromium ≥ 93），独立 iframe 沙箱 |
-| 技术栈 | HTML + CSS + JavaScript（无后端） |
+| 项       | 说明                                                |
+| -------- | --------------------------------------------------- |
+| 平台     | 小红书（Xiaohongshu / RedBook）                     |
+| 容器     | WebView（Chromium ≥ 93），独立 iframe 沙箱          |
+| 技术栈   | HTML + CSS + JavaScript（无后端）                   |
 | 部署方式 | PC 上传（创作者中心 → Builder Hub）或移动端笔记挂载 |
-| 更新方式 | 纯前端改动无需客户端发版（新增/移除 JS API 除外） |
+| 更新方式 | 纯前端改动无需客户端发版（新增/移除 JS API 除外）   |
 
 ### 能力边界（来源：`reference/redbooksmalltools.pdf`）
 
@@ -82,15 +84,32 @@
 
 ```text
 fortune-noodle/
-├── .pi/              # pi 项目配置（skills、tasks）
-├── .reference/       # 参考文档（含技术规范 PDF）
-├── .temp/            # 临时文件（gitignore）
-├── AGENTS.md         # 项目说明（AI 工作约定）
-├── README.md         # 本文件
-├── z.plan.md         # 项目规划与方案文档
-├── x.progress.md     # 进度清单
-├── w.study.md        # 技术研究笔记
-└── y.problem.md      # 问题记录
+├── index.html              # 入口：挂载 UI + 引入模块
+├── package.json            # node ESM 声明（type: module）
+├── css/wheel.css           # 转盘 / 筹码面板 / 结果区样式
+├── js/
+│   ├── random.js           # 可复现随机源（mulberry32 + seed 管理）
+│   ├── candidates.js       # 候选集加载 + 键名导入期校验（契约层）
+│   ├── weights.js          # 权重状态 + 极化更新
+│   ├── converge.js         # 多轮收敛编排（createGame 两段式 + runGame 包装）
+│   ├── wheel.js            # 累计权重定位 + 扇区角换算 + CSS3 旋转动画
+│   ├── bet.js              # 压筹码输入校验 + 面额配置契约 + 向量转换
+│   ├── rules.js            # 规则配置契约（rounds/budget/k/chipDenominations/spin 校验）
+│   ├── ui.js               # DOM 构建 / 刷新 / resolveSeedSource 纯函数
+│   └── main.js             # 启动装配与对局状态机
+├── config/
+│   ├── candidates.json     # 候选集（10 项菜品/餐厅，键名与规则声明）
+│   ├── rules.json          # 轮数 / 筹码预算 / 极化系数 k / 面额 / 动画参数
+│   └── version.json        # 版本号单一来源（V0.1.0.0）
+├── .temp/                  # 无头验证资产（gitignore）
+├── .pi/                    # pi 项目配置（skills/tasks，gitignore）
+├── .reference/             # 参考文档（含技术规范 PDF，gitignore）
+├── AGENTS.md               # 项目说明（AI 工作约定）
+├── README.md               # 本文件
+├── z.plan.md               # 项目规划与方案文档
+├── x.progress.md           # 进度清单
+├── w.study.md              # 技术研究笔记
+└── y.problem.md            # 问题记录
 ```
 
 ## 依赖
