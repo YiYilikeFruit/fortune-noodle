@@ -1,23 +1,28 @@
 // ============================================================
 // 幸运饭桶大转盘 - 启动装配与对局状态机（唯一持业务状态的模块）
-// 设计要点：fetch 配置 → 双契约校验（rules/candidates）→ seed 三来源
-// 解析并记忆 → createGame 逐轮交互（下注 → spinTo 表现 → 轨迹记录）
-// → 末轮锁定展示。错误入口统一中文提示不崩溃（降级不中断主线）。
+// 设计要点：fetch 配置 → 双契约校验 → seed 三来源解析并记忆 →
+// createGame 逐轮交互（bets 下注 → 珠子/盘面双动画表现 → 轨迹记录）
+// → 末轮锁定浮层展示。错误入口统一中文提示不崩溃（降级不中断主线）。
+// PL002 赌场轮盘式：下注走 red/black/low/high/single，动画走
+// ballEndAngles（盘面转 + 珠子反向落格），0 号展示"天降神秘菜"。
 // ============================================================
 
 import { loadCandidates } from "./candidates.js";
 import { validateRules } from "./rules.js";
-import { chipsToVector, validateChips } from "./bet.js";
+import { validateBets } from "./bet.js";
 import { createGame } from "./converge.js";
-import { initWeights } from "./weights.js";
-import { rotationForIndex, spinTo } from "./wheel.js";
+import { ballEndAngles, colorOf, spinBall, spinTo } from "./wheel.js";
 import {
   collectRefs,
   renderWheel,
   buildBetPanel,
+  buildSinglePicker,
+  showSinglePicker,
   refreshBetPanel,
+  betsText,
   appendTraceRow,
   resetTrace,
+  setTraceOpen,
   showResult,
   hideResult,
   setStatus,
@@ -33,9 +38,10 @@ const state = {
   rules: null,
   game: null,
   seedInfo: { seed: "", source: "random" },
-  currentChips: {},
-  selectedId: "",
+  currentBets: [],
+  selectedTarget: { type: "red" },
   discAngle: 0,
+  ballAngle: 0,
   spinning: false,
 };
 
@@ -96,22 +102,58 @@ async function bootstrap() {
     return;
   }
 
-  state.selectedId = state.candidates[0].id;
-
-  buildBetPanel(state.refs, state.candidates, state.rules.chipDenominations, {
-    onSelect: (id) => {
-      state.selectedId = id;
+  buildBetPanel(state.refs, state.candidates, state.rules, {
+    onTarget: (type, number) => {
+      state.selectedTarget = number ? { type, number } : { type };
       refreshBet();
     },
+    onPickSingle: () => showSinglePicker(state.refs, true),
     onChip: addChip,
-    onClear: clearChips,
+    onClear: clearBets,
     onSpin: spinCurrentRound,
+  });
+
+  // 单号选择浮层：选号即设目标并关闭（事件只绑一次）
+  buildSinglePicker(state.refs, {
+    onSelect: (number) => {
+      state.selectedTarget = { type: "single", number };
+      refreshBet();
+      showSinglePicker(state.refs, false);
+    },
+    onCancel: () => showSinglePicker(state.refs, false),
+  });
+
+  // 轨迹抽屉开关（一次性绑定）
+  state.refs.traceToggle.addEventListener("click", () => {
+    const open = state.refs.traceList.hidden;
+    setTraceOpen(state.refs, open);
   });
 
   newGame();
 }
 
-// 开新一局：重建状态机、复位盘面角度与面板（再来一局复用同一入口）
+// 落格弹跳：珠子转回顶部后轻微弹起落下，增强落格手感
+// 行为：WAAPI 三步 keyframes（0 → -8px → 0）；无 Element.animate 时静默跳过
+function bounceBall() {
+  const el = state.refs.ball;
+  if (!el || typeof el.animate !== "function") {
+    return;
+  }
+  try {
+    el.animate(
+      [
+        { transform: "translateY(0)" },
+        { transform: "translateY(-8px)" },
+        { transform: "translateY(0)" },
+      ],
+      { duration: 320, easing: "ease-out" },
+    );
+  } catch {
+    // 动画环境异常不影响对局（降级不中断）
+  }
+}
+
+// 开新一局：重建状态机、复位盘面/珠子角度与面板（再来一局复用同一入口）
 function newGame() {
   // 非首局的"再来一局"生成全新随机 seed 并更新记忆（拍板第 6 条链路）
   if (state.game && state.game.isFinished) {
@@ -120,12 +162,15 @@ function newGame() {
   }
   state.game = createGame(state.candidates, state.seedInfo.seed, state.rules);
   state.discAngle = 0;
-  state.currentChips = {};
+  state.ballAngle = 0;
+  state.currentBets = [];
+  state.selectedTarget = { type: "red" };
   state.spinning = false;
 
   resetTrace(state.refs);
+  setTraceOpen(state.refs, false);
   hideResult(state.refs);
-  renderWheel(state.refs, state.candidates, initWeightsSnapshot());
+  renderWheel(state.refs, state.candidates);
   setSeedInfo(
     state.refs,
     state.seedInfo.seed,
@@ -136,14 +181,9 @@ function newGame() {
   startRound();
 }
 
-// 初始等权快照：复用核心层 initWeights（等权 + rules.initialWeights 覆盖）
-function initWeightsSnapshot() {
-  return initWeights(state.candidates, state.rules.initialWeights);
-}
-
 // 进入新一轮：清空本轮注额、刷新进度与面板可用态
 function startRound() {
-  state.currentChips = {};
+  state.currentBets = [];
   const idx = state.game.roundIndex;
   const total = state.rules.rounds;
   const label =
@@ -152,49 +192,53 @@ function startRound() {
       : `第 ${idx + 1}/${total} 轮`;
   state.refs.progress.textContent = label;
   refreshBet();
-  setStatus(state.refs, "点候选行选中目标，再点筹码压注");
+  setStatus(state.refs, "先选下注目标，再点筹码");
 }
 
-// 加注：预算校验失败仅在状态栏提示，不改当前注额（错误策略：有提示不崩溃）
+// 加注：按当前选中目标追加一条 bet，预算校验失败仅在状态栏提示
 function addChip(denomination) {
   if (state.spinning) {
     return;
   }
-  const next = { ...state.currentChips };
-  next[state.selectedId] = (next[state.selectedId] ?? 0) + denomination;
+  const next = [
+    ...state.currentBets,
+    {
+      type: state.selectedTarget.type,
+      amount: denomination,
+      ...(state.selectedTarget.number !== undefined
+        ? { number: state.selectedTarget.number }
+        : {}),
+    },
+  ];
   try {
-    validateChips(
-      next,
-      state.rules.budget,
-      state.candidates.map((c) => c.id),
-    );
+    validateBets(next, state.rules.budget);
   } catch (e) {
     setStatus(state.refs, e.message);
     return;
   }
-  state.currentChips = next;
+  state.currentBets = next;
   setStatus(state.refs, "");
   refreshBet();
 }
 
-// 清空本轮注额
-function clearChips() {
+// 清空本轮下注
+function clearBets() {
   if (state.spinning) {
     return;
   }
-  state.currentChips = {};
+  state.currentBets = [];
   setStatus(state.refs, "");
   refreshBet();
 }
 
-// 提交本轮并驱动转盘：先重绘扇区地形（极化后权重），再转到既定落点
+// 提交本轮并驱动转盘：盘面转到落点号码格、珠子反向滚动落格
 async function spinCurrentRound() {
   if (state.spinning || state.game.isFinished) {
     return;
   }
-  const ids = state.candidates.map((c) => c.id);
+  let bets;
   try {
-    validateChips(state.currentChips, state.rules.budget, ids);
+    bets = validateBets(state.currentBets, state.rules.budget);
   } catch (e) {
     setStatus(state.refs, e.message);
     return;
@@ -204,38 +248,40 @@ async function spinCurrentRound() {
   refreshBet();
   setStatus(state.refs, "转动中…");
 
-  const vector = chipsToVector(state.currentChips, state.candidates);
-  const outcome = state.game.playRound(vector);
+  const outcome = state.game.playRound(bets);
 
-  // 末轮：先 finalize 取锁定结果作为落点（落点=计算结果红线）
+  // 末轮：先 finalize 取锁定结果作为落点号码（落点=计算结果红线）
   let stopIndex = outcome.stopIndex;
   let finalData = null;
   if (outcome.isFinal) {
     finalData = state.game.finalize();
-    stopIndex = finalData.finalResult;
+    stopIndex = finalData.rounds[finalData.rounds.length - 1].stopIndex;
   }
 
-  // 落点换算基于极化后的扇区地形：先按新权重重绘（押注改变概率地形可视化）
-  renderWheel(state.refs, state.candidates, outcome.weightsAfter);
-  const target = rotationForIndex(outcome.weightsAfter, stopIndex);
-  state.discAngle = await spinTo(
-    state.refs.disc,
-    state.discAngle,
-    target,
-    state.rules.spin,
-  );
+  // 珠子/盘面双动画：盘面把落点号码格转到顶部珠子位，珠子反向绕圈落格
+  const ends = ballEndAngles(stopIndex);
+  const [newDisc, newBall] = await Promise.all([
+    spinTo(state.refs.disc, state.discAngle, ends.discAngle, state.rules.spin),
+    spinBall(
+      state.refs.ballWrap,
+      state.ballAngle,
+      ends.ballAngle,
+      state.rules.spin,
+    ),
+  ]);
+  state.discAngle = newDisc;
+  state.ballAngle = newBall;
+
+  // 落格表现：珠子到位后轻微弹跳（WAAPI，transform 合成器友好；无 animate 则跳过）
+  bounceBall();
 
   // 轨迹行：非末轮报落点；末轮宣布锁定
-  const landedName = state.candidates[stopIndex].name;
-  const betText =
-    Object.entries(state.currentChips)
-      .filter(([, v]) => v > 0)
-      .map(([id, v]) => `${nameOf(id)}×${v}`)
-      .join("、") || "未押注";
+  const betText = betsText(bets) || "未押注";
   if (!outcome.isFinal) {
+    const landed = describeLanding(outcome);
     appendTraceRow(
       state.refs,
-      `第 ${outcome.round} 轮 · 押 ${betText} · B=${outcome.totalBet} · 停在「${landedName}」`,
+      `第 ${outcome.round} 轮 · 押 ${betText} · B=${outcome.totalBet} · ${landed}`,
       false,
     );
     setStatus(state.refs, "");
@@ -260,12 +306,32 @@ async function spinCurrentRound() {
   refreshBet();
 }
 
+// 落点描述：号码 + 颜色 + 对应菜（0 号展示"天降神秘菜"）
+// 输入：outcome 本轮 playRound 结果；输出：可读落点文案
+function describeLanding(outcome) {
+  const number = outcome.stopIndex;
+  if (number === 0) {
+    const zeroName = nameOf(state.candidates[outcome.zeroPick]?.id);
+    return `🎲 天降神秘菜「${zeroName}」（号码 0）`;
+  }
+  const cand = state.candidates.find((c) => c.number === number);
+  const colorName = colorLabel(number);
+  return `停在 ${number}（${colorName}）「${cand?.name ?? number}」`;
+}
+
+// 号码颜色中文标签（展示用，颜色走 wheel.js colorOf 权威表）
+function colorLabel(number) {
+  return (
+    { red: "红", black: "黑", green: "绿" }[colorOf(number)] ?? colorOf(number)
+  );
+}
+
 // id → 名称的小工具（轨迹与结果文案用）
 function nameOf(id) {
   return state.candidates.find((c) => c.id === id)?.name ?? id;
 }
 
-// 筹码面板状态刷新（透传当前快照给渲染层）
+// 赌桌面板状态刷新（透传当前快照给渲染层）
 function refreshBet() {
   const idx = state.game.roundIndex;
   const total = state.rules.rounds;
@@ -278,10 +344,9 @@ function refreshBet() {
   refreshBetPanel(
     state.refs,
     label,
-    state.candidates,
-    state.currentChips,
+    state.currentBets,
     state.rules.budget,
-    state.selectedId,
+    state.selectedTarget,
     state.spinning,
   );
 }

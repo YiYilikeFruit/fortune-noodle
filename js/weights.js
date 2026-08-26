@@ -1,10 +1,18 @@
 // ============================================================
 // 幸运饭桶大转盘 - 权重状态与极化更新
 // 设计要点：初始等权 w_i=1，rules.initialWeights 可按候选 id 覆盖；
-// applyBet 执行极化公式 w_i ← w_i×(1+k·c_i/B)（B=Σc_i 本轮总注）；
-// 全程纯函数：返回新数组、绝不修改输入（可解释可回放）。
-// 关联配置：k 与 initialWeights 来自 config/rules.json（PL001.7.b），由调用方传入。
+// PL002 赌场轮盘式升降权——applyBet 按 bets 描述（red/black/low/high/single）
+// 展开命中号码集合，命中菜升权 w×(1+k·amount/B)、未命中菜降权
+// w×(1-k·amount/B)，逐 bet 累乘（乘法交换律 → 与顺序无关、可解释）；
+// 0 号（numberToIndex[0]=-1）不参与；权重保底 >0。全程纯函数。
+// 关联配置：k 与 initialWeights 来自 config/rules.json（PL001.7.b）。
 // ============================================================
+
+import { betTypeToNumbers } from "./bet.js";
+import { LAYOUT } from "./wheel.js";
+
+// 权重保底：极端 k 或满额单注下未命中乘数可能 ≤0，保底防归零
+const WEIGHT_FLOOR = 1e-9;
 
 // 判断是否为合法权重值：有限非负数字
 // 说明：0 允许（配置上永不倾向该选项）；字符串等宽松形态在这里不接受——
@@ -28,34 +36,68 @@ export function initWeights(candidates, initialOverrides) {
   });
 }
 
-// 极化更新一轮权重：w_i ← w_i×(1+k·c_i/B)，B=Σc_i
-// 输入：weights 当前权重数组；chips 与 weights 同序的下注额数组；k 极化系数
-// 输出：全新权重数组；B=0（全程零注）时返回同值浅拷贝，语义"零注不变"
-// 异常：长度失配 / chip 非法 / k 非法 → 中文 fail-fast（编程错误早暴露）
-export function applyBet(weights, chips, k) {
-  if (!Array.isArray(weights) || !Array.isArray(chips)) {
-    throw new Error("applyBet 的 weights 与 chips 都必须是数组");
+// 升降权更新一轮权重：命中菜升、未命中菜降，逐 bet 累乘（PL002 定案）
+// 输入：weights 当前权重数组（36 菜同序）；bets 规范化下注描述
+//   [{type, amount, number?}]；k 极化系数；numberToIndex 号码→菜索引映射
+//   （buildNumberMap 产物，长度 37，0 号位 -1）
+// 输出：全新权重数组；B=0（空注/零额）时返回同值浅拷贝，语义"零注不变"
+// 公式：单 bet {type, amount}，B=Σamount——命中该 bet 号码集合的菜
+//   w×(1+k·amount/B)，未命中菜 w×(1-k·amount/B)；多 bet 逐个累乘
+//   （乘法交换律成立，顺序无关）；每次结果与 WEIGHT_FLOOR 取 max 保底
+// 异常：weights/bets/numberToIndex 结构非法 / k 非法 / 金额非法 → 中文 fail-fast
+export function applyBet(weights, bets, k, numberToIndex) {
+  if (!Array.isArray(weights) || !Array.isArray(bets)) {
+    throw new Error("applyBet 的 weights 与 bets 都必须是数组");
   }
-  if (chips.length !== weights.length) {
+  if (typeof k !== "number" || !Number.isFinite(k) || k < 0) {
+    throw new Error(`applyBet 的极化系数 k 必须是非负有限数字，收到：${k}`);
+  }
+  if (!Array.isArray(numberToIndex) || numberToIndex.length < 37) {
     throw new Error(
-      `applyBet 长度失配：weights=${weights.length}，chips=${chips.length}`,
+      "applyBet 需要 buildNumberMap 产出的号码→索引映射（长度 ≥37）",
     );
   }
-  if (typeof k !== "number" || !Number.isFinite(k)) {
-    throw new Error(`applyBet 的极化系数 k 必须是有限数字，收到：${k}`);
-  }
+
   let totalBet = 0;
-  for (const c of chips) {
-    if (typeof c !== "number" || !Number.isFinite(c) || c < 0) {
-      throw new Error(`applyBet 的下注额必须是非负有限数字，收到：${c}`);
+  for (const bet of bets) {
+    if (bet === null || typeof bet !== "object") {
+      throw new Error("applyBet 的 bets 每项必须是 {type, amount} 对象");
     }
-    totalBet += c;
+    if (
+      typeof bet.amount !== "number" ||
+      !Number.isFinite(bet.amount) ||
+      bet.amount < 0
+    ) {
+      throw new Error(
+        `applyBet 的下注额必须是非负有限数字，收到：${bet.amount}`,
+      );
+    }
+    totalBet += bet.amount;
   }
-  // 零注轮：B=0 时公式分母无意义，直接原样返回拷贝（保持"不改输入"约定）
+  // 零注轮：B=0 时升降乘数分母无意义，直接原样返回拷贝（保持"不改输入"约定）
   if (totalBet === 0) {
     return weights.slice();
   }
-  return weights.map((w, i) => w * (1 + (k * chips[i]) / totalBet));
+
+  let out = weights.slice();
+  for (const bet of bets) {
+    // 命中号码 → 菜索引集合（跳过 -1：0 号独立格不参与升降权）
+    const nums = betTypeToNumbers(bet.type, bet.number, LAYOUT);
+    const hit = new Set();
+    for (const n of nums) {
+      const idx = numberToIndex[n];
+      if (idx >= 0) {
+        hit.add(idx);
+      }
+    }
+    const up = 1 + (k * bet.amount) / totalBet;
+    const down = 1 - (k * bet.amount) / totalBet;
+    out = out.map((w, i) => {
+      const m = hit.has(i) ? up : down;
+      return Math.max(w * m, WEIGHT_FLOOR);
+    });
+  }
+  return out;
 }
 
 // ===== js/weights.js 模块说明 =====

@@ -4,11 +4,21 @@
   "k": 0.5,
   "initialWeights": {},
   "chipDenominations": [5, 10, 20, 50],
+  "payouts": {
+    "red": 1,
+    "black": 1,
+    "low": 1,
+    "high": 1,
+    "single": 35
+  },
+  "zeroWeight": 1,
   "spin": {
     "durationMs": 4200,
     "extraTurns": 6,
     "easing": "cubic-bezier(0.16, 1, 0.3, 1)",
-    "settleTimeoutMs": 150
+    "settleTimeoutMs": 150,
+    "ballDurationMs": 5200,
+    "ballExtraTurns": 8
   },
-  "configVersion": "rules-v1"
+  "configVersion": "rules-v2"
 }

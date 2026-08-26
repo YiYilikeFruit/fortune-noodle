@@ -11,19 +11,21 @@
 import { initWeights, applyBet } from "./weights.js";
 import { pickStopIndex } from "./wheel.js";
 import { createRNG } from "./random.js";
+import { buildNumberMap } from "./candidates.js";
 
 // 权重并列判定容差：applyBet 浮点累乘后理论相等值可能差 ~1e-16，
 // 容差并列更符合"并列"语义（严格相等会漏判不同路径收敛到同值的情况）
 const TIE_EPSILON = 1e-12;
 
 // 创建一局可逐步推进的对局状态机（UI 交互形态）
-// 输入：candidates 规范化候选数组；seed 整局基础 seed；rules 已校验规则
-// 输出：{ playRound(chips), finalize(), roundIndex, isFinished }
-//   playRound(同序下注向量) → { round, totalBet, stopIndex, weightsAfter, isFinal }
-//     非末轮即时给出转盘落点；末轮 stopIndex 暂为 null，finalize 后回填锁定结果
+// 输入：candidates 规范化候选数组（36 菜，number 1-36）；seed 整局基础 seed；
+//   rules 已校验规则（含 payouts/zeroWeight）
+// 输出：{ playRound(bets), finalize(), roundIndex, isFinished }
+//   playRound(bets 描述列表) → { round, bets, totalBet, stopIndex, weightsAfter, isFinal }
+//     非末轮即时给出轮盘落点号码（0-36，含 0 号随机菜路径）；末轮 stopIndex 暂为 null
 //   finalize() → { finalResult, finalId, rounds, meta }（幂等，可重复取）
 // 异常：空候选 / rounds 非正整数 / 整局结束后再 playRound /
-//   未完成全部轮次即 finalize → 中文 fail-fast；向量合法性由 applyBet 把关
+//   未完成全部轮次即 finalize → 中文 fail-fast；下注合法性由调用方 validateBets 把关
 export function createGame(candidates, seed, rules) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
     throw new Error("createGame 需要非空候选集");
@@ -31,36 +33,61 @@ export function createGame(candidates, seed, rules) {
   if (!rules || !Number.isInteger(rules.rounds) || rules.rounds < 1) {
     throw new Error("createGame 的 rules.rounds 必须是正整数");
   }
+  if (typeof rules.zeroWeight !== "number" || rules.zeroWeight <= 0) {
+    throw new Error("createGame 的 rules.zeroWeight 必须是正数");
+  }
 
   const rng = createRNG(seed);
+  const numberMap = buildNumberMap(candidates);
   let weights = initWeights(candidates, rules.initialWeights);
   const isSingle = candidates.length === 1;
   const trace = [];
   let finalOutcome = null;
 
-  function playRound(chips) {
+  function playRound(bets) {
     if (finalOutcome !== null) {
       throw new Error("整局已结束，不能再下注");
     }
     if (trace.length >= rules.rounds) {
       throw new Error(`对局共 ${rules.rounds} 轮，无法继续追加`);
     }
-    weights = applyBet(weights, chips, rules.k);
+    if (!Array.isArray(bets)) {
+      throw new Error("playRound 需要下注描述数组 [{type, amount}]");
+    }
+    const betsSnapshot = bets.map((b) => ({ ...b }));
+    weights = applyBet(weights, bets, rules.k, numberMap);
 
     // 末轮不进随机落点：结果由 argmax 锁定而非随机数（z.plan 第三章收敛定义），
-    // 循环后以 finalResult 回填末轮 stopIndex——保证全程"落点=计算结果"
+    // finalize 后以锁定菜的号码回填末轮 stopIndex——保证全程"落点=计算结果"
     let stopIndex = null;
+    let zeroPick = null;
     const isFinal = trace.length === rules.rounds - 1;
     if (!isFinal) {
-      // 单候选短路：落点恒 0，且规避"唯一扇区权重为 0 时无区间可停"的死局
-      stopIndex = isSingle ? 0 : pickStopIndex(weights, rng);
+      if (isSingle) {
+        // 单候选短路：落点恒为该候选的号码，规避"唯一扇区权重为 0"死局
+        stopIndex = candidates[0].number;
+      } else {
+        // 37 格定位权重：0 号格恒用 rules.zeroWeight（不随升降权），1-36 号按菜权重
+        const gridWeights = [rules.zeroWeight, ...weights];
+        stopIndex = pickStopIndex(gridWeights, rng);
+        // 0 号落点：随机神秘菜——从 36 菜均匀随机抽 1 个（独立 seed 派生流可复现），
+        // 权重直接升至当前最大（悬念保留，后续轮次仍可被下注影响）
+        if (stopIndex === 0) {
+          const zeroRng = createRNG(`zero:${String(seed)}:${trace.length + 1}`);
+          const chosen = zeroRng.int(0, weights.length - 1);
+          const maxW = Math.max(...weights);
+          weights[chosen] = maxW;
+          zeroPick = chosen;
+        }
+      }
     }
-    const totalBet = chips.reduce((sum, c) => sum + c, 0);
+    const totalBet = bets.reduce((sum, b) => sum + (b.amount ?? 0), 0);
     const snapshot = {
       round: trace.length + 1,
-      chips: chips.slice(),
+      bets: betsSnapshot,
       totalBet,
       stopIndex,
+      zeroPick,
       weightsAfter: weights.slice(),
     };
     trace.push(snapshot);
@@ -94,9 +121,9 @@ export function createGame(candidates, seed, rules) {
       finalResult = tiedIndexes[tieRng.int(0, tiedIndexes.length - 1)];
     }
 
-    // 末轮落点回填为锁定结果：转盘末轮精确停在 argmax 扇区（仪式感收尾），
+    // 末轮落点回填为锁定菜的号码：转盘末轮精确停在 argmax 扇区（仪式感收尾），
     // 全程维持"转盘落点 = 计算结果、不弄虚作假"的项目红线
-    trace[trace.length - 1].stopIndex = finalResult;
+    trace[trace.length - 1].stopIndex = candidates[finalResult].number;
 
     finalOutcome = {
       finalResult,

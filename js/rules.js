@@ -9,7 +9,18 @@ import { validateDenominations } from "./bet.js";
 import { SPIN_DEFAULTS } from "./wheel.js";
 
 // 必填键：缺一即契约失败（对局无法成立的核心参数）
-const REQUIRED_KEYS = ["rounds", "budget", "k", "chipDenominations"];
+// payouts 为下注类型展示赔率（PL002）；zeroWeight 为 0 号格定位权重（不参与升降权）
+const REQUIRED_KEYS = [
+  "rounds",
+  "budget",
+  "k",
+  "chipDenominations",
+  "payouts",
+  "zeroWeight",
+];
+
+// 下注类型赔率键集：与 bet.js BET_TYPES 对齐（red/black/low/high/single）
+const PAYOUT_KEYS = ["red", "black", "low", "high", "single"];
 
 // 弹性数值解析内核：数字直用；数字字符串转数字；其余拒绝（配置侧宽容口径）
 function toNumber(value, label) {
@@ -56,6 +67,37 @@ export function validateRules(raw) {
   // 面额表委托 bet.js 契约（非空/正数/无重复），返回升序副本
   const chipDenominations = validateDenominations(raw.chipDenominations);
 
+  // payouts：下注类型赔率契约（纯展示用），每键必须为正数（弹性数字）
+  const rawPayouts = raw.payouts;
+  if (
+    rawPayouts === null ||
+    typeof rawPayouts !== "object" ||
+    Array.isArray(rawPayouts)
+  ) {
+    throw new Error("payouts 必须是 { 下注类型: 赔率 } 对象");
+  }
+  const payouts = {};
+  for (const key of PAYOUT_KEYS) {
+    if (!(key in rawPayouts) || rawPayouts[key] === undefined) {
+      throw new Error(`payouts 缺少下注类型「${key}」赔率`);
+    }
+    const v = toNumber(rawPayouts[key], `payouts.${key} `);
+    if (v <= 0) {
+      throw new Error(
+        `payouts.${key} 必须是正数，收到：${JSON.stringify(rawPayouts[key])}`,
+      );
+    }
+    payouts[key] = v;
+  }
+
+  // zeroWeight：0 号格定位权重（正数；不参与升降权，恒定性定位用）
+  const zeroWeight = toNumber(raw.zeroWeight, "zeroWeight ");
+  if (zeroWeight <= 0) {
+    throw new Error(
+      `zeroWeight 必须是正数（0 号格定位权重），收到：${JSON.stringify(raw.zeroWeight)}`,
+    );
+  }
+
   // 初始权重可选：null/缺省视为等权；存在则须为对象（键值合法性由 initWeights 宽容兜底）
   let initialWeights = {};
   if (raw.initialWeights !== undefined && raw.initialWeights !== null) {
@@ -97,6 +139,23 @@ export function validateRules(raw) {
   if (typeof easing !== "string" || easing.trim() === "") {
     throw new Error("spin.easing 必须是非空字符串（CSS timing 函数）");
   }
+  // 珠子轨道动画独立参数（PL002.6）：时长/圈数与盘面解耦
+  const ballDurationMs = toNumber(
+    spinInput.ballDurationMs ?? SPIN_DEFAULTS.ballDurationMs,
+    "spin.ballDurationMs ",
+  );
+  if (ballDurationMs <= 0) {
+    throw new Error("spin.ballDurationMs 必须为正");
+  }
+  const ballExtraTurnsRaw = toNumber(
+    spinInput.ballExtraTurns ?? SPIN_DEFAULTS.ballExtraTurns,
+    "spin.ballExtraTurns ",
+  );
+  if (!Number.isInteger(ballExtraTurnsRaw) || ballExtraTurnsRaw < 0) {
+    throw new Error(
+      `spin.ballExtraTurns 必须是非负整数，收到：${JSON.stringify(spinInput.ballExtraTurns)}`,
+    );
+  }
 
   return {
     rounds,
@@ -104,7 +163,16 @@ export function validateRules(raw) {
     k,
     initialWeights,
     chipDenominations,
-    spin: { durationMs, extraTurns: extraTurnsRaw, easing, settleTimeoutMs },
+    payouts,
+    zeroWeight,
+    spin: {
+      durationMs,
+      extraTurns: extraTurnsRaw,
+      easing,
+      settleTimeoutMs,
+      ballDurationMs,
+      ballExtraTurns: ballExtraTurnsRaw,
+    },
     configVersion:
       raw.configVersion === undefined ? null : String(raw.configVersion),
   };

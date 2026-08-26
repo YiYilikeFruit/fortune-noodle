@@ -1,10 +1,21 @@
 // ============================================================
 // 幸运饭桶大转盘 - 压筹码输入校验与形态转换
-// 设计要点：UI 层筹码面板的自然形态是 { id: 金额 } 映射；
-// validateChips 负责预算/合法性拦截（宽容解析数字字符串）；
-// chipsToVector 把映射转成与候选集同序的下注向量供 converge 编排消费；
-// 筹码面额表走 rules.chipDenominations 配置，本模块提供其契约校验。
+// 设计要点：PL002 赌场轮盘式下注——下注类型枚举 red/black/low/high/single，
+// betTypeToNumbers 展开为号码集合（依赖 wheel.js 红黑布局），
+// validateBets 负责类型/单号/预算拦截；validateChips/chipsToVector 为
+// PL001 旧下注形态（保留待 PL002.7 UI 替换）；筹码面额走 rules 配置。
 // ============================================================
+
+import { LAYOUT } from "./wheel.js";
+
+// 下注类型枚举（PL002 定案）：核心赌场下注；暂不做奇偶/列注/打线
+export const BET_TYPES = Object.freeze([
+  "red",
+  "black",
+  "low",
+  "high",
+  "single",
+]);
 
 // 弹性数值解析内核：数字直用；数字字符串 trim 后转数字；其余拒绝
 // 输入：value 任意值；label 报错定位描述
@@ -105,6 +116,78 @@ export function validateDenominations(rawList) {
     return v;
   });
   return out.sort((a, b) => a - b);
+}
+
+// 下注类型 → 号码集合（PL002 核心映射：赌桌下注展开为轮盘号码）
+// 输入：type 下注类型（red/black/low/high/single）；number 单号下注的号码；
+//   layout 红黑布局表（默认 wheel.js LAYOUT，可注入测试）
+// 输出：号码数组（red/black 各 18 个、low=1-18、high=19-36、single=[number]）
+// 异常：未知类型 / single 号码越界（1-36，0 号独立不可押）→ 中文 fail-fast
+export function betTypeToNumbers(type, number, layout = LAYOUT) {
+  if (!BET_TYPES.includes(type)) {
+    throw new Error(`未知下注类型「${type}」，支持：${BET_TYPES.join("/")}`);
+  }
+  if (type === "red" || type === "black") {
+    return layout.map((c, i) => (c === type ? i : -1)).filter((i) => i >= 1);
+  }
+  if (type === "low") {
+    return Array.from({ length: 18 }, (_, i) => i + 1);
+  }
+  if (type === "high") {
+    return Array.from({ length: 18 }, (_, i) => i + 19);
+  }
+  if (type === "single") {
+    if (!Number.isInteger(number) || number < 1 || number > 36) {
+      throw new Error(
+        `single 下注需要 1-36 号码（0 号独立格不可押），收到：${JSON.stringify(number)}`,
+      );
+    }
+    return [number];
+  }
+  throw new Error(`未知下注类型「${type}」`);
+}
+
+// 校验并规范化本轮下注描述列表
+// 输入：bets [{type, amount, number?}]（single 必带 number）；budget 本轮预算
+// 输出：全新规范化数组 [{type, amount}]（single 项保留 number；金额数字形态）
+// 异常：非数组 / 项非对象 / 未知类型 / single 越界 / 负或坏金额 / 总额超预算
+//   → 中文 fail-fast（超预算消息带两侧数值）
+export function validateBets(bets, budget) {
+  if (!Array.isArray(bets)) {
+    throw new Error(
+      `下注必须是 [{type, amount}] 数组，收到类型：${typeof bets}`,
+    );
+  }
+  const checkedBudget = toNonNegativeNumber(budget, "预算 ");
+  const out = [];
+  let total = 0;
+  for (let i = 0; i < bets.length; i++) {
+    const bet = bets[i];
+    if (bet === null || typeof bet !== "object" || Array.isArray(bet)) {
+      throw new Error(`下注第 ${i + 1} 项必须是 {type, amount} 对象`);
+    }
+    if (!BET_TYPES.includes(bet.type)) {
+      throw new Error(
+        `下注第 ${i + 1} 项未知类型「${bet.type}」，支持：${BET_TYPES.join("/")}`,
+      );
+    }
+    const amount = toNonNegativeNumber(bet.amount, `下注「${bet.type}」金额 `);
+    const norm = { type: bet.type, amount };
+    if (bet.type === "single") {
+      if (!Number.isInteger(bet.number) || bet.number < 1 || bet.number > 36) {
+        throw new Error(
+          `single 下注需要 1-36 号码（0 号独立格不可押），收到：${JSON.stringify(bet.number)}`,
+        );
+      }
+      norm.number = bet.number;
+    }
+    out.push(norm);
+    total += amount;
+  }
+  if (total > checkedBudget) {
+    throw new Error(`下注总额 ${total} 超出本轮预算 ${checkedBudget}`);
+  }
+  return out;
 }
 
 // ===== js/bet.js 模块说明 =====

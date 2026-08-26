@@ -7,6 +7,62 @@
 //   SPIN_DEFAULTS 仅为缺省兜底的单一声明处。
 // ============================================================
 
+// 标准欧洲轮盘红黑布局（PL002 定案）：index = 号码 0-36，值 = 颜色
+// 0 号绿色独立；1-36 红黑按标准布局（红 18 / 黑 18），号码决定颜色、
+// 颜色不存菜品上（P23 契约定案：维度枚举代码内显式声明不外置）
+export const LAYOUT = Object.freeze([
+  "green",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+  "black",
+  "red",
+]);
+
+// 轮盘扇区数：37 格（0 + 1-36），扇区角 = 360/37（PL002 定案）
+export const SECTOR_COUNT = 37;
+
+// 号码格颜色查询：0 绿 / 1-36 红黑
+// 输入：number 轮盘号码（0-36）；输出：颜色字符串
+// 异常：越界（非 0-36 整数）→ 中文 fail-fast
+export function colorOf(number) {
+  if (!Number.isInteger(number) || number < 0 || number > 36) {
+    throw new Error(`colorOf 需要 0-36 整数号码，收到：${number}`);
+  }
+  return LAYOUT[number];
+}
+
 // 权重数组守卫：非空且全为非负有限数字，返回总和
 // 异常：空数组/负权重/非有限权重 → 中文 fail-fast（pickStopIndex/sectorAngles 共用）
 function assertWeights(weights) {
@@ -68,6 +124,27 @@ export function angleForIndex(stopIndex, sectorCount) {
   return ((stopIndex + 0.5) * 360) / sectorCount;
 }
 
+// 珠子式转盘终止角推导（PL002 定案）：由落点号码可逆推导盘面与珠子的终止角
+// 输入：stopIndex 落点号码（0-36，格下标 = 号码）；输出 { discAngle, ballAngle }
+//   discAngle：盘面需旋转到的目标角——把该号码格中心转到顶部（珠子落格位）
+//   ballAngle：珠子落格点角，恒 0（珠子始终在顶部轨道点落格，不随号码变）
+// 说明：动画只表现该终止状态（收敛逻辑先算出落点，表现不产生新随机）
+// 异常：号码越界（非 0-36 整数）→ 中文 fail-fast
+export function ballEndAngles(stopIndex) {
+  if (
+    !Number.isInteger(stopIndex) ||
+    stopIndex < 0 ||
+    stopIndex >= SECTOR_COUNT
+  ) {
+    throw new Error(
+      `ballEndAngles 需要 0-${SECTOR_COUNT - 1} 号码，收到：${stopIndex}`,
+    );
+  }
+  const center = angleForIndex(stopIndex, SECTOR_COUNT);
+  // 盘面顺时针转到该格中心对准顶部（0 度）所需角；珠子恒定在顶部落格
+  return { discAngle: (360 - center) % 360, ballAngle: 0 };
+}
+
 // 按当前权重比例计算各扇区角度区间（转盘绘制与落点换算共用口径）
 // 输入：weights 权重数组；输出 [{start, end, center}] 度数数组，
 //   从指针方向 0 度顺时针展开，扇区 i 占 [start_i, end_i)，center 为其中点
@@ -98,30 +175,39 @@ export function rotationForIndex(weights, index) {
 }
 
 // 动画缺省参数单一声明处：装配层应从 rules.json 读取后经 opts 覆盖传入
-// settleTimeoutMs 为 transitionend 丢失时的兜底等待增量
+// settleTimeoutMs 为 transitionend 丢失时的兜底等待增量；
+// ballDurationMs/ballExtraTurns 为珠子轨道动画独立参数（PL002.6）
 export const SPIN_DEFAULTS = Object.freeze({
   durationMs: 4000,
   extraTurns: 5,
   easing: "cubic-bezier(0.16, 1, 0.3, 1)",
   settleTimeoutMs: 120,
+  ballDurationMs: 5200,
+  ballExtraTurns: 8,
 });
 
-// 旋转动画到既定落点：CSS transition 驱动，transitionend + 定时器双保险
-// 输入：el 转盘元素；fromAngle 当前累计角度；toAngle 目标扇区盘面角（angleForIndex 输出）；
-//   opts 覆盖 SPIN_DEFAULTS 字段
+// 旋转动画公共内核：CSS transition 驱动，transitionend + 定时器双保险
+// 输入：el 目标元素；fromAngle 当前累计角度；toAngle 目标角；turns 附加整圈数
+//   （盘面正向 +，珠子反向 -）；durationMs/easing/settleTimeoutMs 动画参数
 // 输出：Promise<number>——resolve 本次写入的总角度（调用方存为下次 fromAngle）
-// 行为：总角度 = fromAngle + extraTurns 整圈 + 归一化的正向角差（只顺时针不倒转）；
-//   双保险：transitionend 触发即收尾；事件丢失则 durationMs+settleTimeoutMs 后兜底收尾，
-//   两路互斥（settled 标志），监听器与定时器均清理防泄漏
+// 行为：总角度 = fromAngle + turns·360 + 归一化角差（只绕向目标不倒转）；
+//   双保险：transitionend 触发即收尾；事件丢失则 durationMs+settleTimeoutMs 后兜底
 // 异常：el 缺 style/addEventListener 时抛原生 TypeError（装配错误早暴露）
-export function spinTo(el, fromAngle, toAngle, opts = {}) {
+function animateRotate(
+  el,
+  fromAngle,
+  toAngle,
+  turns,
+  durationMs,
+  easing,
+  settleTimeoutMs,
+) {
   return new Promise((resolve) => {
-    const o = { ...SPIN_DEFAULTS, ...opts };
-    // 归一化正向角差：无论 toAngle 相对 fromAngle 在哪个象限都只顺时针到达
+    // 归一化角差：无论 toAngle 相对 fromAngle 在哪个象限都按 turns 方向到达
     const delta = (((toAngle - fromAngle) % 360) + 360) % 360;
-    const total = fromAngle + o.extraTurns * 360 + delta;
+    const total = fromAngle + turns * 360 + delta;
 
-    el.style.transition = `transform ${o.durationMs}ms ${o.easing}`;
+    el.style.transition = `transform ${durationMs}ms ${easing}`;
     el.style.transform = `rotate(${total}deg)`;
 
     let settled = false;
@@ -132,7 +218,7 @@ export function spinTo(el, fromAngle, toAngle, opts = {}) {
       }
       finish();
     };
-    const timer = setTimeout(finish, o.durationMs + o.settleTimeoutMs);
+    const timer = setTimeout(finish, durationMs + settleTimeoutMs);
 
     function finish() {
       if (settled) {
@@ -150,6 +236,41 @@ export function spinTo(el, fromAngle, toAngle, opts = {}) {
 
     el.addEventListener("transitionend", onEnd);
   });
+}
+
+// 盘面旋转动画到既定落点（PL002：把号码格转到顶部珠子位）
+// 输入：el 盘面元素；fromAngle 当前累计角度；toAngle ballEndAngles 的 discAngle；
+//   opts 覆盖 SPIN_DEFAULTS 字段
+// 输出：Promise<number>——resolve 本次写入的总角度（调用方存为下次 fromAngle）
+export function spinTo(el, fromAngle, toAngle, opts = {}) {
+  const o = { ...SPIN_DEFAULTS, ...opts };
+  return animateRotate(
+    el,
+    fromAngle,
+    toAngle,
+    o.extraTurns,
+    o.durationMs,
+    o.easing,
+    o.settleTimeoutMs,
+  );
+}
+
+// 珠子轨道动画：沿盘缘反向绕圈，最终落回顶部（toAngle 恒 0 顶部落格）
+// 输入：el 珠子轨道元素；fromAngle 当前珠子累计角；toAngle 目标角（0）；
+//   opts 覆盖 SPIN_DEFAULTS（ballDurationMs/ballExtraTurns 生效）
+// 输出：Promise<number>——resolve 本次写入的总角度（调用方存为下次 fromAngle）
+// 行为：与盘面反向（turns 取负），视觉上珠子逆着盘面滚动减速落格
+export function spinBall(el, fromAngle, toAngle, opts = {}) {
+  const o = { ...SPIN_DEFAULTS, ...opts };
+  return animateRotate(
+    el,
+    fromAngle,
+    toAngle,
+    -o.ballExtraTurns,
+    o.ballDurationMs,
+    o.easing,
+    o.settleTimeoutMs,
+  );
 }
 
 // ===== js/wheel.js 模块说明 =====

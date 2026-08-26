@@ -12,38 +12,48 @@
   <body>
     <header class="app-header">
       <h1>🍜 幸运饭桶大转盘</h1>
-      <p class="subtitle">压筹码 · 转起来 · 今天就吃它</p>
+      <p class="subtitle">下注 · 转起来 · 今天就吃它</p>
+      <div id="round-progress" aria-label="轮次进度"></div>
+      <div class="header-meta">
+        <span id="seed-info"></span>
+        <span id="status-bar" role="status"></span>
+      </div>
     </header>
 
-    <main>
-      <!-- 区块一：转盘区（指针 + 权重比例扇区盘面） -->
+    <main class="app-main">
+      <!-- 转盘区：盘面（37 格）+ 珠子（沿轨道滚动，无指针） -->
       <section id="wheel-section" aria-label="转盘区">
         <div id="wheel-wrap">
-          <div id="wheel-pointer">▼</div>
-          <div id="wheel-disc"></div>
+          <div id="wheel-ball-wrap" aria-hidden="true">
+            <span id="wheel-ball"></span>
+          </div>
+          <div id="wheel-disc" aria-label="轮盘盘面"></div>
         </div>
       </section>
 
-      <!-- 区块二：轮次进度 -->
-      <section id="round-progress" aria-label="轮次进度"></section>
+      <!-- 赌桌下注面板（红/黑/大/小 + 单号数字网格，JS 构建） -->
+      <section id="bet-panel" aria-label="赌桌下注面板"></section>
 
-      <!-- 区块三：筹码面板（候选选择 + 面额按钮 + 操作，JS 构建） -->
-      <section id="bet-panel" aria-label="压筹码面板"></section>
-
-      <!-- 区块四：结果卡（默认隐藏，末轮锁定后弹出） -->
-      <section id="result-card" hidden aria-label="结果卡"></section>
-
-      <!-- 区块五：收敛轨迹 -->
+      <!-- 收敛轨迹抽屉（默认收起） -->
       <section id="trace-section" aria-label="收敛轨迹">
-        <h2 class="section-title">收敛轨迹</h2>
-        <ol id="trace-list"></ol>
+        <button type="button" id="trace-toggle" aria-expanded="false">
+          收敛轨迹
+        </button>
+        <ol id="trace-list" hidden></ol>
       </section>
     </main>
 
-    <footer>
-      <span id="seed-info"></span>
-      <span id="status-bar" role="status"></span>
-    </footer>
+    <!-- 结果卡浮层（覆盖式，默认隐藏） -->
+    <div id="result-card" hidden aria-label="结果卡"></div>
+
+    <!-- 单号选择浮层（覆盖式，36 号大格 ≥44px 点击区） -->
+    <div id="single-picker" hidden aria-label="单号选择">
+      <div class="picker-box">
+        <p class="picker-title">选择一个号码（0 号独立，不可押）</p>
+        <div id="single-grid"></div>
+        <button type="button" id="single-cancel">取消</button>
+      </div>
+    </div>
 
     <script type="module" src="js/main.js"></script>
   </body>
