@@ -230,9 +230,18 @@ reference/
 # pi 项目级工具配置（skills/tasks，本地工作流不入库）
 .pi/
 
+# agent 项目技能（.agents/skills，本地工作流不入库；含 46M 提示词库不宜入库）
+.agents/
+
 # 归档与临时
 archived/
 .temp/
+
+# taste-skill 检测产物（截图/report 本地留档不入库）
+.taste-skill/
+
+# OpenChamber 浏览器截图（本地工具产物不入库）
+.openchamber/
 
 # 凭据（严禁提交）
 opencode-go.json

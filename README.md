@@ -1,6 +1,6 @@
 # 幸运饭桶大转盘
 
-> **V0.1.1.0** · 版本号唯一来源：[`config/version.json`](config/version.json)
+> **V0.1.2.0** · 版本号唯一来源：[`config/version.json`](config/version.json)
 
 用大转盘 + 压筹码的趣味游戏，帮你决定今天吃什么。
 
@@ -98,7 +98,7 @@ fortune-noodle/
 ├── config/
 │   ├── candidates.json     # 候选集（36 项菜品，number 1-36 全覆盖）
 │   ├── rules.json          # 轮数 / 预算 / k / 赔率 / 0号权重 / 面额 / 动画参数
-│   └── version.json        # 版本号单一来源（V0.1.1.0）
+│   └── version.json        # 版本号单一来源（V0.1.2.0）
 ├── .temp/                  # 无头验证资产（gitignore）
 ├── .opencode/              # opencode 项目配置（skills）
 ├── AGENTS.md               # 项目说明（AI 工作约定）

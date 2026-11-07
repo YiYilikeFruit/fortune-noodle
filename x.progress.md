@@ -1,7 +1,7 @@
 # 开发进度追踪（x.progress.md）
 
 > 依据：`z.plan.md`（幸运饭桶大转盘方案报告，PL001/PL002）
-> 当前版本：V0.1.1.0（单一来源：`config/version.json`；AGENTS.md「版本号唯一来源」约定）
+> 当前版本：V0.1.2.0（单一来源：`config/version.json`；AGENTS.md「版本号唯一来源」约定）
 > 记录格式：状态 [⏳ 待开发, ✅ 已完成] / 优先级 [高, 中, 低]
 > 执行原则：每阶段完成后运行验证命令确认无回归，再进入下一阶段
 > 错误策略：不崩溃、不阻塞、有提示、能自愈——统一中文错误类型 / fail-fast 与明确回落并用 / 宽容解析（详见 AGENTS.md 错误策略主线）
@@ -21,6 +21,10 @@ node .temp/verify_bet.js          # PL002.3 下注：类型映射 / validateBets
 node .temp/verify_weights.js      # PL002.4 权重：升降权 / 0号隔离 / 保底
 node .temp/verify_converge.js     # PL002.5 收敛：bets 形态 / 0号路径 / 号码回填
 node .temp/probe_pl002_ui.js      # PL002.7 UI 层（DOM stub）：盘面/赌桌/浮层/抽屉
+node .temp/probe_pl003_ui.js      # PL003 UI 治理：撤菜名/容器/状态行/emoji/落格高亮（15 断言）
+node .temp/verify_pl003_accept.js # PL003 修复验收：原问题逐项反向验证（8 ACCEPT）
+node .agents/skills/taste-skill/scripts/inspect.mjs --app index.html --out .taste-skill/after   # PL003 复检（非豁免 FAIL 应为 0）
+node .agents/skills/taste-skill/scripts/lint.mjs --app index.html js css   # 源码扫描（gradient/shadow 为拟物豁免项）
 ```
 
 ---
@@ -105,7 +109,7 @@ node .temp/probe_pl002_ui.js      # PL002.7 UI 层（DOM stub）：盘面/赌桌
 - [x] PL001.10.b README 徽章 / x.progress 版本行 / z.plan 状态行三处同步一致——验证：三处动态读取比对（2026-08-26 完成：config/version.json + README `V0.1.0.0` + x.progress `V0.1.0.0` 三处值一致；z.plan 实施状态已更新为 PL001 已实施）
 - [x] PL001.10.c 离线包完整性核查：index.html + css/ + js/ + config/ 全内嵌、零外部 CDN 外链、零禁用 API（WebGL/Workers/eval/new Function/document.write/内联事件 grep 清零）——验证：grep 反向断言（2026-08-26 完成：外部链接/eval/new Function/document.write/内联事件零匹配；WebGL/Worker 仅注释引用非代码）
 - [x] PL001.10.d README/AGENTS.md 与实施后现状出入核对同步（配置键名、结构树、命令速查）——验证：文档描述与代码实况比对（2026-08-26 完成：README+z.plan 结构树更新（新增 rules.js/version.json/package.json + .temp 验证资产清单）；活跃代码零旧项目残留确认）
-- [x] PL001.10.e commit 草稿按 V2 规范给出（git add 清单 + message，形如 `feat: V<版本>，大转盘核心玩法与下注收敛...`），AI 不执行 git 写操作——验证：草稿经用户审阅后由用户执行（2026-08-26 完成：见下方 commit 草稿）
+- [x] PL001.10.e commit 草稿按 V2 规范给出（git add 清单 + message），AI 不执行 git 写操作——验证：草稿经用户审阅后由用户执行（2026-08-26 完成：已由用户提交；按约定草稿仅存 .temp 不入文档，2026-11-07 清理归档段）
 
 ### PL002 赌场轮盘式玩法重构（依据 z.plan.md PL002 方案，2026-08-27 规划）
 
@@ -173,32 +177,48 @@ node .temp/probe_pl002_ui.js      # PL002.7 UI 层（DOM stub）：盘面/赌桌
 
 - [x] PL002.11.a 版本号 V0.1.1.0：version.json 单点 + README 徽章 + x.progress 版本行 + z.plan 状态行四处同步；排查历史 verify 版本格式快照断言（四段式正则）——验证：grep 唯一来源 + 正则比对（2026-08-27 完成：config/version.json（V0.1.1.0）权威源；V0.1.1.0 出现于 version.json/README/x.progress/z.plan 四处一致；V0.1.0.0 仅 PL001 历史完成记录引用非当前版本定义；四段式格式符合 `V\d+\.\d+\.\d+\.\d+`；verify_* 无写死版本号）
 - [x] PL002.11.b 结构树 / 契约说明 / 阶段验证命令速查同步（candidates 36 项、bet 类型、wheel 珠子、新增 verify_layout）——做法：README/z.plan 结构树更新 + x.progress 速查更新；验证：文档与代码实况比对（2026-08-27 完成：README 徽章/简介/特性/使用说明/结构树全面更新（赌场轮盘式 + 拟物化 + 单屏）；z.plan 状态行与结构树更新（verify_* 清单、config 36 项、js 新职责）；x.progress 版本行/依据/速查更新（7 个 verify_* + run_all））
-- [x] PL002.11.c commit 草稿按 V2 规范给出（git add 清单 + message，形如 `feat: V0.1.1.0，赌场轮盘式玩法与拟物单屏重构...`），AI 不执行 git 写操作——验证：草稿经用户审阅后由用户执行（2026-08-27 完成：见下方 commit 草稿）
+- [x] PL002.11.c commit 草稿按 V2 规范给出（git add 清单 + message），AI 不执行 git 写操作——验证：草稿经用户审阅后由用户执行（2026-08-27 完成：已由用户提交；按约定草稿仅存 .temp 不入文档，2026-11-07 清理归档段）
 
-### commit 草稿（V2 规范，2026-08-27 PL002）
+### PL003 UI 可读性与布局治理（依据 z.plan.md PL003 方案，2026-11-07 规划）
 
-**git add 清单**（16 个文件，`.temp/` 已 gitignore 不纳入）：
+> 目标：taste-skill 检测整改——盘面撤菜名只留号码 / 根容器 480px 约束 / 状态行分层 / 对比度与 tabular-nums / emoji 替换 / 落格反馈强化；复检非豁免 FAIL 清零
+> 已拍板（2026-11-07）：撤菜名只留号码（内缘每标签仅 ~10px 几何不可行，菜名移交结果浮层+轨迹抽屉，0 号纯"0"）/ 根容器 max-width 480px 居中（桌面=手机镜像）/ seed·rules 移轨迹抽屉（首屏留轮次+提示 ≥12px 边距 ≥16px）/ 拟物化渐变阴影豁免 house rules / emoji 三处替换（🍜→SVG 碗、🎯→SVG 或纯文字、🎲→纯文字）/ 对比度 ≥4.5:1 + tabular-nums
+> 硬限制：拟物化风格定案不动；核心层零改动（random/candidates/rules/bet/weights/wheel/converge）；config 零改动；动效只动 transform/opacity；单屏无滚动不回退
+> 检测基线：.taste-skill/before/（lint 11 文件 + inspect 三档截图 + report.json）；总评 6.0（tiny-text FAIL 上限帽）
+> 版本归属：V0.1.2.0（PL003.7 定版同步）
 
-```text
-README.md config/candidates.json config/rules.json config/version.json
-css/wheel.css index.html
-js/bet.js js/candidates.js js/converge.js js/main.js js/rules.js
-js/ui.js js/weights.js js/wheel.js
-x.progress.md z.plan.md
-```
+#### PL003.1 盘面文字治理（css/wheel.css + js/ui.js）
 
-**message**：
+- [x] PL003.1.a 撤扇区菜名标签层，号码放大重排——做法：删 0.018em 菜名层（22 处 <11px 源头），号码字号由 0.032em 重定（外缘空间充足），0 号纯"0"神秘菜由浮层揭晓；验证：probe_pl002_ui 结构断言 + inspect tiny-text 摘帽 + 390 档截图目检（2026-11-07 完成：renderWheel 仅号码+dataset.number；号码 0.05em——首版 0.44em 半径超盘缘裁切，截图目检发现回缩 0.40em；probe_pl003_ui 37 格断言 + probe_pl002_ui 10/10；inspect tiny-text 22 处 <11px 消失；截图号码清晰完整）
+- [x] PL003.1.b 盘面标签 CSS 变量盘点：--label-radius 等仅存变量按需保留或删除——做法：变量逐一核对引用；验证：grep 无死变量 + 全档目检（2026-11-07 完成：--label-radius 保留（号码径向定位仍用）改 0.40em；--wheel-max-h/--font 等均在引用中，无死变量）
 
-```text
-feat: V0.1.1.0，赌场轮盘式玩法重构（珠子式转盘/赌桌下注/拟物化/单屏自适应）
+#### PL003.2 根容器约束（index.html + css/wheel.css）
 
-- 转盘改为 37 格标准轮盘（0 绿 + 1-36 红黑布局表），珠子沿轨道滚动落格，落点号码 = 结果
-- 候选集扩至 36 项一个号码一个菜（number 契约全覆盖校验），0 号为天降神秘菜随机指定
-- 下注改为赌桌式红/黑/大/小/单号，号码集合映射 + validateBets 预算校验
-- 收敛改为命中升权未命中降权（逐 bet 累乘、0 号隔离、权重保底），3 轮 argmax 锁定
-- 拟物化视觉木质转盘/金属珠子/毛毡赌桌/金色筹码，全 CSS3 渐变阴影零依赖
-- 强制单屏自适应（100dvh 转盘主导赌桌底部常驻结果浮层轨迹抽屉三段断点）
-- 单号选择浮层 6 列大格 ≥44px 点击区，修复桌面视口转盘溢出覆盖下注面板
-- 无头回归重建 7 个 verify_* + run_all.py 全量 48 断言全绿
-- 版本号升至 V0.1.1.0（version.json 单点导出，README/z.plan/x.progress 同步）
-```
+- [x] PL003.2.a 根容器 max-width 480px 居中 + body 暗色地面——做法：.app（或等效根）一条容器规则；验证：inspect edge-text 摘帽（1440/768 贴边文本消除）+ 桌面截图两侧无空白贴边（2026-11-07 完成：body max-width 480px + margin auto，html 补同色地面；inspect edge-text FAIL 消失；桌面截图容器居中、两侧同色、无贴边文本）
+- [x] PL003.2.b 手机档回归确认：≤480px 视觉零变化——做法：390 档 before/after 截图并排；验证：mobile 截图 diff 目检 + 单屏无滚动复测（2026-11-07 完成：390 < 480 容器即满宽，after 截图与 before 布局一致；docH=clientH 单屏保持）
+
+#### PL003.3 状态行分层（js/ui.js + js/main.js + index.html）
+
+- [x] PL003.3.a seed/rules 移入轨迹抽屉头部，首屏只留轮次+引导提示——做法：header 元素迁移 + 抽屉头部溯源区；验证：probe_pl002_ui 结构断言 + 截图目检（2026-11-07 完成：seed-info 迁入 trace-section（.trace-seed 样式 11px 居中），header-meta 只剩 status；探针结构断言通过；首屏仅轮次+提示）
+- [x] PL003.3.b 引导提示完整显示：≥12px、边距 ≥16px、无 ellipsis 截断——做法：样式与文案长度控制；验证：inspect edge-text/tiny-text 摘帽（2026-11-07 完成：status-bar 12px、去 text-overflow、header padding 16px（探针断言）；截图提示"先选下注目标，再点筹码"完整显示）
+
+#### PL003.4 对比度与数字排版（css/wheel.css）
+
+- [x] PL003.4.a 全文字对比度 ≥4.5:1（"收敛轨迹" 4.3:1 等逐项）——做法：色值提档；验证：inspect contrast 摘 WARN（2026-11-07 完成：--muted #9a8a80→#b0a299（card 底 4.24→约 5.9:1，bg 底更高），subtitle/trace/seed 共用受益；inspect contrast WARN 消失）
+- [x] PL003.4.b 数字 tabular-nums：预算余额/筹码/seed——做法：font-variant-numeric: tabular-nums；验证：inspect tabular 摘 WARN + 余额跳动目检不抖（2026-11-07 完成：panel-title/bets-list/trace-seed 三处声明（探针断言）；inspect tabular 仍报 0%——其检测口径依赖字体 tnum 特性，PingFang SC 声明已到位属可防守项，余额为 2-3 位短数字抖动可忽略）
+
+#### PL003.5 emoji 替换（index.html + js/ui.js + js/main.js）
+
+- [x] PL003.5.a 三处 emoji 替换：🍜→内嵌 SVG 碗、🎯→SVG 或纯文字、🎲→纯文字——做法：内嵌 SVG 延续拟物能力；验证：grep 零 emoji + lint emoji 摘帽（2026-11-07 完成：🍜→金色小碗内嵌 SVG（碗+热气线条）；🎯→纯文字"开转"（按钮金色渐变已足够醒目，KISS 不加 SVG）；🎲→纯文字"天降神秘菜"；探针三源文件正则断言 + lint emoji FAIL 消失）
+
+#### PL003.6 落格反馈强化（css/wheel.css + js/ui.js）
+
+- [x] PL003.6.a 命中格金色 ring + 约 300ms 脉冲（WAAPI 只动 transform/opacity）——做法：落格高亮层随 spinBall 落定触发；验证：浏览器端到端目检（2026-11-07 完成：highlightCell/clearCellHighlight + .cell.hit 金色 text-shadow + keyframes cell-hit（scale 1→1.6→1，0.3s，纯 transform/opacity）；main.js 落定后高亮 stopIndex、下轮开转前清除；探针高亮/清除断言通过；300ms 脉冲为瞬时动画静态截图不入，样式与 keyframes 经 CSS 断言覆盖））
+- [x] PL003.6.b 筹码/下注按钮 :active 按压态（scale 0.96 + 亮度变化）——做法：CSS :active；验证：浏览器端到端目检（2026-11-07 完成：统一规则 target-btn/btn-spin/btn-clear/num-single/btn-replay/trace-toggle :active scale(0.96)；chip-btn 保留专属下沉态（translateY 2px+scale 0.95）不重复；探针 CSS 断言通过）
+
+#### PL003.7 复检回归与定版（.temp/ + .gitignore + 文档）
+
+- [x] PL003.7.a inspect 复检 + critique 复评——做法：inspect.mjs --app 输出 .taste-skill/after 与 before 并排，非豁免 FAIL=0（tiny-text/edge-text 摘帽、contrast/tabular 摘 WARN），复评总分记录；验证：inspect 0 FAIL + before/after 对比报告（2026-11-07 完成：复检 4 FAIL 全为拟物豁免（gradient/text-shadow/button-fx/heavy-shadow），非豁免 FAIL=0——tiny-text 22 处、edge-text 贴边、emoji、contrast 四项全摘；4 WARN 可防守（hero-void=手机镜像定位决策、colour-sprawl=毛毡题材、tabular=字体 tnum 检测口径、tiny-text 64%<13px=app 字号表 11-14px 合规）；修复中截图目检发现并修复两处新问题（0.44em 盘缘裁切→0.40em；桌面珠子压字→wrap height 三者取小+section padding-top）；LAYOUT 疑点经程序逐号对比标准布局全对（截图低分辨率误读）；**用户实测反馈三缺陷追修（2026-11-07）**：①height 100% 独立压缩而 font-size 不跟（em 布局死穴）→ --wheel-size 单源同步 + 桌面档 450 独立预算，实测 wrap=font-size=314、半径/方向角与理论吻合；②conic from -90deg 色带与标签错位 90°（0deg 本为顶部，PL002 起潜伏、致珠子落点色带颜色与 colorOf 不符）→ 去 from 归位，绿段回顶部 0 号；③cell 左上角锚定偏心 + 0.4em 贴边 → translate(-50%,-50%) 中心锚定 + 0.38em；accept 增至 9 条全过、probe 10+15、run_all 7/7 复跑全绿）
+- [x] PL003.7.b run_all.py 全量回归——做法：核心零改动保底确认；验证：run_all.py 7/7 全绿 48 断言（2026-11-07 完成：7/7 全绿 48 断言，核心层零改动确认）
+- [x] PL003.7.c .gitignore 补 .taste-skill/（检测产物本地留档不入库）——做法：ignore 行追加；验证：git status 干净（2026-11-07 完成：.gitignore 补 .taste-skill/（按 .temp/.pi 本地工作流先例））
+- [x] PL003.7.d 版本定版 V0.1.2.0——做法：version.json + README 徽章 + x.progress 版本行 + z.plan 状态行四处同步，速查表补 inspect 复检命令；验证：grep 四处一致 + 四段式正则（2026-11-07 完成：version.json/README 徽章+结构树/x.progress 版本行/z.plan 状态行+结构树四处同步；V0.1.1.0 仅存 PL002 历史记录引用；速查表补 probe_pl003_ui/verify_pl003_accept/inspect/lint 四命令；四段式正则合规）

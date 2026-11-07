@@ -14,17 +14,21 @@
   --accent: #ffb300;
   --accent-deep: #ff8f00;
   --text: #f5efe6;
-  --muted: #9a8a80;
+  --muted: #b0a299; /* PL003 提亮：card 底对比度 ≥4.5:1 */
   --line: #3a3a3a;
   --danger: #ff6b6b;
   --felt: #1b5e20;
   --felt-light: #2e7d32;
   --gold: #ffd700;
   --gold-deep: #b8860b;
-  --label-radius: 0.36em; /* 标签离盘面中心的距离（em 相对 wrap 尺寸，随盘径） */
+  --label-radius: 0.38em; /* 号码离盘面中心距离（em 相对 wrap 尺寸）：0.38 + 字形半高 0.03 ≈ 0.41em < disc 半径 0.455em，四边留 10px+ 余量 */
   --wheel-max-h: calc(
     100dvh - 380px
-  ); /* 转盘尺寸上限（header+赌桌+轨迹高度预算） */
+  ); /* 转盘尺寸上限（header+赌桌+轨迹高度预算；手机档预算，桌面档 480px+ 有独立预算） */
+  /* 盘径与字号单一来源：em 布局（label-radius/号码字号均相对 wrap font-size）
+     必须与容器高度严格同步，任何一侧单独缩水都会把号码推出盘外裁掉
+     （PL003 实测教训：height 被 100% 压缩而 font-size 未跟 → 37 格全被裁） */
+  --wheel-size: clamp(220px, min(88vw, var(--wheel-max-h)), 420px);
   --font: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
@@ -38,10 +42,16 @@ body {
   margin: 0;
 }
 
+html {
+  background: var(--bg); /* PL003：桌面档 body 收窄后两侧同色地面 */
+}
+
 body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  max-width: 480px; /* PL003 根容器约束：强制单屏手机宽度，桌面预览=手机镜像 */
+  margin: 0 auto;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -49,18 +59,22 @@ body {
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* ---------- 头部（压缩合并轮次/seed/状态） ---------- */
+/* ---------- 头部（压缩合并轮次/状态；seed 溯源移轨迹抽屉 PL003） ---------- */
 
 .app-header {
   flex-shrink: 0;
   text-align: center;
-  padding: 6px 12px 4px;
+  padding: 6px 16px 4px;
 }
 
 .app-header h1 {
   margin: 0;
   font-size: 20px;
   letter-spacing: 1px;
+}
+
+.bowl-icon {
+  vertical-align: -0.2em;
 }
 
 .subtitle {
@@ -78,18 +92,14 @@ body {
 
 .header-meta {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 10px;
-  color: var(--muted);
+  justify-content: center;
+  color: var(--danger);
 }
 
 #status-bar {
-  color: var(--danger);
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  text-align: center;
+  font-size: 12px; /* PL003：引导提示完整显示，不再 10px 贴边截断 */
 }
 
 /* ---------- 主区（单屏：转盘吸收剩余 + 赌桌底部常驻） ---------- */
@@ -109,13 +119,17 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  padding-top: 10px; /* 珠子轨道顶点在 wrap 顶，留余量防压 header 文字 */
 }
 
 #wheel-wrap {
   position: relative;
-  width: min(88vw, var(--wheel-max-h));
+  /* PL003 修复：height 与 font-size 同源（--wheel-size）——em 布局下两者
+     必须严格同步；此前 height 的 100% 上限单独压缩而 font-size 不跟，
+     导致 label-radius 按大字号算出、号码全部推出盘外被裁 */
+  height: var(--wheel-size);
   aspect-ratio: 1 / 1;
-  font-size: clamp(220px, min(88vw, var(--wheel-max-h)), 420px);
+  font-size: var(--wheel-size);
 }
 
 /* 盘面：37 格等分（JS 内联 conic-gradient），拟物木纹外环 + 金属描边 */
@@ -156,7 +170,7 @@ body {
     inset 0 -2px 3px rgba(0, 0, 0, 0.35);
 }
 
-/* 盘面标签（号码 + 菜名双环，径向排布；em 相对 wrap 尺寸响应式） */
+/* 盘面号码标签（径向排布；em 相对 wrap 尺寸响应式；PL003 撤菜名仅号码） */
 .cell {
   position: absolute;
   top: 50%;
@@ -172,16 +186,28 @@ body {
 }
 
 .cell-num {
-  font-size: 0.032em;
+  display: inline-block; /* 供落格脉冲 transform 使用 */
+  font-size: 0.05em;
   font-weight: 800;
 }
 
-.cell-name {
-  font-size: 0.018em;
-  opacity: 0.95;
-  max-width: 4.5em;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* 落格高亮：命中格金色脉冲（PL003 反馈强化；只动 transform/opacity） */
+.cell.hit .cell-num {
+  color: var(--gold);
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.85);
+  animation: cell-hit 0.3s ease-out;
+}
+
+@keyframes cell-hit {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ---------- 赌桌下注面板（拟物毛毡） ---------- */
@@ -205,6 +231,7 @@ body {
   color: #e8dcc0;
   margin-bottom: 6px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 红/黑/大/小 四格 */
@@ -244,6 +271,16 @@ body {
 .target-btn.selected {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
+}
+
+/* 按压反馈（PL003：下注/操作/单号/重玩统一手感；chip-btn 有专属下沉态） */
+.target-btn:not(:disabled):active,
+#btn-clear:not(:disabled):active,
+#btn-spin:not(:disabled):active,
+.num-single:not(:disabled):active,
+#btn-replay:not(:disabled):active,
+#trace-toggle:active {
+  transform: scale(0.96);
 }
 
 /* 单号目标按钮（全宽，点击弹出浮层） */
@@ -343,6 +380,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 筹码面额（拟物圆环） */
@@ -427,6 +465,16 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* seed/rules 溯源行（PL003 自 header 移入抽屉：元数据不占首屏） */
+.trace-seed {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
 }
 
 #trace-list {
@@ -575,10 +623,6 @@ button:disabled {
   .app-header h1 {
     font-size: 18px;
   }
-
-  .cell-name {
-    font-size: 0.016em;
-  }
 }
 
 @media (min-width: 430px) {
@@ -593,8 +637,12 @@ button:disabled {
   .num-btn {
     font-size: 10px;
   }
+}
 
-  .cell-name {
-    font-size: 0.02em;
+@media (min-width: 480px) {
+  :root {
+    /* 桌面档独立预算：header+赌桌+轨迹实测约 441px（手机档 380 预算在
+       桌面低估 → 盘面溢出 section 压到 header 文字，PL003 实测教训） */
+    --wheel-max-h: calc(100dvh - 450px);
   }
 }

@@ -31,6 +31,7 @@
 - 提交信息按 Git 注意章节的 Commit 提交规范（V2）书写，如 `feat: V0.1，大转盘核心玩法与下注收敛...`
 - 项目规划与方案文档在 `z.plan.md`
 - `reference/` 目录是外部项目的 git clone（浅克隆），**不纳入本仓库版本控制**；需要更新时重新 clone
+- **UI 资产与设计技能来源**：UI 资产（动效配方/图标/设计系统/生图提示词等）可去同目录 Collection 项目库（`CodeMission/Collection`）找——其 `.agents/skills/` 技能包 + `UI assets/`、`icon assets/`、`motion assets/` 等资产目录；本项目 `.agents/skills/` 是从中筛选的子集，不够用再去那边复制
 
 ## 工程原则（设计哲学，所有项目通用）
 

@@ -65,44 +65,56 @@ export function collectRefs() {
   return refs;
 }
 
-// 绘制固定 37 格轮盘盘面（PL002：等分、颜色走 LAYOUT，不随权重变化）
-// 输入：refs.disc 盘面元素；candidates 规范化候选数组（number 1-36）
-// 行为：conic-gradient 37 等分红黑绿；每格一个标签（号码 + 菜名双环），
-//   0 号菜名为"神秘菜"；conic 起点 -90deg 使格 0 中心对齐顶部珠子位
-//   与 ballEndAngles（discAngle 目标 0 度 = 顶部）口径一致
-export function renderWheel(refs, candidates) {
+// 绘制固定 37 格轮盘盘面（PL002：等分、颜色走 LAYOUT，不随权重变化；
+// PL003：撤菜名只留号码——内缘每标签仅 ~10px 菜名不可读，菜名展示
+// 职责移交结果浮层与轨迹抽屉）
+// 输入：refs.disc 盘面元素（candidates 参数已随撤菜名移除）
+// 行为：conic-gradient 37 等分红黑绿；每格一个号码标签（径向排布，
+//   dataset.number 供落格高亮定位）；conic 默认 0deg 即正上方——与
+//   cell 标签的 rotate 参考系（0=顶部、顺时针）同系，禁止 from 偏移
+//   （PL003 教训：原 from -90deg 把色带转 90°，色带与标签错位、
+//   珠子落点下色带颜色与 colorOf 不符）
+export function renderWheel(refs) {
   const angle = 360 / SECTOR_COUNT;
-  const nameByNumber = new Map(candidates.map((c) => [c.number, c.name]));
   const stops = [];
-  const labels = [];
   for (let n = 0; n < SECTOR_COUNT; n++) {
-    const color = LAYOUT[n];
     const start = n * angle;
-    stops.push(`${color} ${start}deg ${start + angle}deg`);
-    const center = start + angle / 2;
-    labels.push({
-      number: n,
-      name: n === 0 ? "神秘菜" : (nameByNumber.get(n) ?? `菜${n}`),
-      center,
-      color,
-    });
+    stops.push(`${LAYOUT[n]} ${start}deg ${start + angle}deg`);
   }
-  refs.disc.style.background = `conic-gradient(from -90deg, ${stops.join(", ")})`;
+  refs.disc.style.background = `conic-gradient(${stops.join(", ")})`;
 
   const old = refs.disc.querySelectorAll(".cell");
   old.forEach((el) => el.remove());
-  for (const item of labels) {
+  for (let n = 0; n < SECTOR_COUNT; n++) {
+    const center = n * angle + angle / 2;
     const span = document.createElement("span");
     span.className = "cell";
-    span.style.transform = `rotate(${item.center}deg) translateY(calc(-1 * var(--label-radius))) rotate(${-item.center}deg)`;
+    span.dataset.number = String(n);
+    // translate(-50%,-50%) 先把 cell 中心锚到 disc 中心——left/top:50% 定位的是
+    // 左上角，缺此步旋转圆心会偏右下导致外圈号码贴盘缘被裁（PL003 实测教训）
+    span.style.transform = `translate(-50%, -50%) rotate(${center}deg) translateY(calc(-1 * var(--label-radius))) rotate(${-center}deg)`;
     const num = document.createElement("span");
     num.className = "cell-num";
-    num.textContent = item.number;
-    const nm = document.createElement("span");
-    nm.className = "cell-name";
-    nm.textContent = item.name;
-    span.append(num, nm);
+    num.textContent = String(n);
+    span.append(num);
     refs.disc.appendChild(span);
+  }
+}
+
+// 落格高亮：落点号码格加 .hit（金色脉冲样式，见 css .cell.hit）
+// 输入：refs.disc；number 落点号码（0-36）
+// 行为：仅落点格带 hit，其余格清除——转动前旧高亮一并被清
+export function highlightCell(refs, number) {
+  for (const cell of refs.disc.querySelectorAll(".cell")) {
+    cell.classList.toggle("hit", cell.dataset.number === String(number));
+  }
+}
+
+// 清除落格高亮（新一轮开转前调用）
+// 输入：refs.disc；行为：移除全部 .hit
+export function clearCellHighlight(refs) {
+  for (const cell of refs.disc.querySelectorAll(".cell")) {
+    cell.classList.remove("hit");
   }
 }
 
@@ -250,7 +262,7 @@ export function refreshBetPanel(
   clearBtn.textContent = "清空下注";
   const spinBtn = refs.betPanel.querySelector("#btn-spin");
   spinBtn.disabled = spinning;
-  spinBtn.textContent = spinning ? "转动中…" : "🎯 开转";
+  spinBtn.textContent = spinning ? "转动中…" : "开转";
 }
 
 // 构建单号选择浮层：36 个号码大格（≥44px 点击区）+ 取消（事件只绑一次）
@@ -352,9 +364,12 @@ function escapeHtml(text) {
 // 函数清单与逻辑：
 // - SEED_STORAGE_KEY/resolveSeedSource：seed 链路常量与三来源纯函数（沿用 PL001）
 // - collectRefs()：骨架节点收集与缺失守卫（新增 ballWrap/traceToggle 等 PL002 节点）
-// - renderWheel(refs, candidates)：固定 37 格盘面——conic-gradient 等分红黑绿
-//   （LAYOUT），每格标签"号码 + 菜名"双环径向排布；conic 起点 -90deg 使格 0
+// - renderWheel(refs)：固定 37 格盘面——conic-gradient 等分红黑绿
+//   （LAYOUT），每格仅号码标签（PL003 撤菜名，内缘空间不可容纳文字；
+//   dataset.number 供落格高亮定位）；conic 起点 -90deg 使格 0
 //   中心对齐顶部珠子位，与 ballEndAngles 口径一致；不随权重变化（固定轮盘）
+// - highlightCell(refs, number)/clearCellHighlight(refs)：落点格金色
+//   高亮（css .cell.hit 脉冲）与清除（PL003 落格反馈强化）
 // - buildBetPanel(...handlers)：赌桌一次性构建——红/黑/大/小四格 + 1-36 单号
 //   网格（颜色随号码）+ 面额筹码 + 下注摘要 + 清空/开转；事件委托一次性绑定
 // - betsText/betTypeLabel：下注摘要文案（红×10、单号7×5）

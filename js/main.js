@@ -27,6 +27,8 @@ import {
   hideResult,
   setStatus,
   setSeedInfo,
+  highlightCell,
+  clearCellHighlight,
   resolveSeedSource,
   SEED_STORAGE_KEY,
 } from "./ui.js";
@@ -170,7 +172,7 @@ function newGame() {
   resetTrace(state.refs);
   setTraceOpen(state.refs, false);
   hideResult(state.refs);
-  renderWheel(state.refs, state.candidates);
+  renderWheel(state.refs);
   setSeedInfo(
     state.refs,
     state.seedInfo.seed,
@@ -247,6 +249,7 @@ async function spinCurrentRound() {
   state.spinning = true;
   refreshBet();
   setStatus(state.refs, "转动中…");
+  clearCellHighlight(state.refs);
 
   const outcome = state.game.playRound(bets);
 
@@ -272,8 +275,9 @@ async function spinCurrentRound() {
   state.discAngle = newDisc;
   state.ballAngle = newBall;
 
-  // 落格表现：珠子到位后轻微弹跳（WAAPI，transform 合成器友好；无 animate 则跳过）
+  // 落格表现：珠子到位后轻微弹跳 + 落点格金色脉冲高亮（PL003 反馈强化）
   bounceBall();
+  highlightCell(state.refs, stopIndex);
 
   // 轨迹行：非末轮报落点；末轮宣布锁定
   const betText = betsText(bets) || "未押注";
@@ -312,7 +316,7 @@ function describeLanding(outcome) {
   const number = outcome.stopIndex;
   if (number === 0) {
     const zeroName = nameOf(state.candidates[outcome.zeroPick]?.id);
-    return `🎲 天降神秘菜「${zeroName}」（号码 0）`;
+    return `天降神秘菜「${zeroName}」（号码 0）`;
   }
   const cand = state.candidates.find((c) => c.number === number);
   const colorName = colorLabel(number);

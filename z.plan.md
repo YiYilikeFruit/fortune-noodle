@@ -5,7 +5,7 @@
 > 平台：小红书 App WebView 沙箱（Chromium ≥ 93），纯 HTML5 单页应用（HTML + CSS + JS），无后端、无构建
 > 技术约束：见 AGENTS.md 运行与验证（可用 CSS3 动画/过渡、Canvas 2D、SVG、fetch/localStorage、触摸/手势；禁用 WebGL/WASM/Workers/eval/new Function/document.write/内联事件/外链 JS）
 > 参考基准：AGENTS.md 结构（通用工具 → 配置 → 业务核心{旋转/下注/收敛/候选集管理} → 界面 → 静态数据）与代码规范；错误策略主线（不崩溃/不阻塞/有提示/能自愈）
-> 实施状态：✅ **PL001 完整 MVP 已实施（V0.1.0.0，2026-08-26）+ PL002 赌场轮盘式玩法重构已实施（V0.1.1.0，2026-08-27：珠子式转盘 + 赌桌下注 + 拟物化 + 单屏自适应；无头回归 + 浏览器端到端全通）**
+> 实施状态：✅ **PL001 完整 MVP 已实施（V0.1.0.0，2026-08-26）+ PL002 赌场轮盘式玩法重构已实施（V0.1.1.0，2026-08-27：珠子式转盘 + 赌桌下注 + 拟物化 + 单屏自适应；无头回归 + 浏览器端到端全通）+ PL003 UI 可读性与布局治理已实施（V0.1.2.0，2026-11-07：盘面撤菜名 / 容器 480px / 状态行分层 / emoji 替换 / 落格反馈；taste-skill 复检非豁免 FAIL 清零）**
 
 ---
 
@@ -75,7 +75,7 @@ fortune-noodle/
 ├── config/
 │   ├── candidates.json     候选集（36 项菜品，number 1-36 全覆盖）
 │   ├── rules.json          轮数 / 预算 / k / 赔率 / 0号权重 / 面额 / 动画参数
-│   └── version.json        版本号单一来源（V0.1.1.0）
+│   └── version.json        版本号单一来源（V0.1.2.0）
 ├── .temp/                  无头验证资产
 │   ├── verify_layout.js / verify_candidates.js / verify_rules.js
 │   ├── verify_wheel.js / verify_bet.js / verify_weights.js / verify_converge.js
@@ -284,3 +284,66 @@ fortune-noodle/
 - 版本：V0.1.1.0（对应 PL002 全部改动一次提交）
 - 涉及模块：config/candidates.json、config/rules.json、js/candidates.js、js/bet.js、js/weights.js、js/wheel.js、js/converge.js、js/ui.js、js/main.js、css/wheel.css、.temp/verify_*（新增 verify_layout.js）
 - 不涉及：js/random.js（随机源不变）、js/rules.js（契约键增补 payouts）
+
+## PL003. UI 可读性与布局治理（2026-11-07 定案）
+
+> 来源：PL002 收尾后以 taste-skill（本项目 .agents/skills/taste-skill）对 UI 做真实浏览器检测——lint.mjs --app（11 文件）+ inspect.mjs --app（1440/768/390 三档实测截图）+ critique.md 评审；甄别拟物化豁免项后余 6 项真问题，总评 6.0（tiny-text FAIL 触发上限帽）；检测产物留档 .taste-skill/before/
+> 状态：✅ **已实施（2026-11-07：7 组 15 条全完成；taste-skill 复检非豁免 FAIL 清零（tiny-text/edge-text/emoji/contrast 摘帽），余 4 FAIL 全为拟物化豁免项；probe_pl003_ui 15/15、probe_pl002_ui 10/10、run_all 7/7、反向验收 8/8 ACCEPT）**
+> 目标版本：V0.1.2.0（已定版：version.json 单点 + README 徽章 + x.progress 版本行 + z.plan 状态行四处同步）
+
+### 背景
+
+PL002 拟物化赌场轮盘 UI 完成后做一轮 UI 检测找优化点。检测口径：拟物化渐变/阴影/浓彩为题材定案，豁免 taste-skill house rules（赌场拟物非模板风），只计可用性与布局真问题。实测 FAIL：盘面菜名 8px 不可读（22 处 <11px 文本块）、seed/提示文本贴视口边 12px、顶部状态行三段信息挤一行且引导提示被截断为"再点…"；WARN：对比度 4.3:1 不足（"收敛轨迹"）、数字无 tabular-nums；另桌面 1440 无容器约束全面崩坏（两侧各约 500px 空白、赌桌按钮拉满全宽）。单屏无滚动约束达成、safe-area 已处理、触控目标达标——底盘合格，治理集中在可读性与容器两件事。
+
+### 决策结论（2026-11-07 拍板）
+
+1. **盘面撤菜名、只留号码**：菜名在内缘（--label-radius 0.36em，内缘周长约 384px），37 个标签每个仅分到约 10px，而 4 字菜名需 32px+，挤压 4 倍且径向排布下半球文字永远倒置——几何不可行；菜名展示职责移交已有的结果浮层 + 轨迹抽屉；0 号扇区显示纯"0"，"神秘菜"由结果浮层揭晓
+2. **根容器 max-width 480px 居中**：一条规则修复桌面档全部布局问题（seed/提示贴视口边、赌桌按钮拉满 1440 全宽、两侧空白）；与"强制单屏手机宽度"定位自洽，桌面预览 = 手机镜像；手机档（≤480px）视觉零变化
+3. **顶部状态行分层**：seed/rules 为溯源元数据，移入轨迹抽屉头部；首屏只留"第 X/3 轮" + 引导提示（≥12px 完整显示、左右边距 ≥16px、禁止 ellipsis 截断）
+4. **拟物化风格定案不动**：渐变/阴影/浓彩豁免 taste-skill house rules；复检基线以此口径记录（lint 的 gradient/shadow 项为豁免项不计 FAIL）
+5. **emoji 3 处替换**：index.html 标题 🍜 → 内嵌 SVG 碗；ui.js 开转按钮 🎯 → 内嵌 SVG 或纯文字；main.js 轨迹文案 🎲 → 纯文字（拟物体系内自洽）
+6. **可用性底线**：全部文字对比度 ≥4.5:1；数字 font-variant-numeric: tabular-nums；22 处 <11px 文本随决策 1/3 一并消化
+
+### 设计要点与具体修改方案
+
+#### 盘面文字治理（css/wheel.css + js/ui.js）
+
+- 删除扇区菜名标签层（现 0.018em ≈ 6-8px）；号码字号由 0.032em（≈11px）放大到扇区可容纳的合理占比（外缘周长约 1000px+，1-2 位数字空间充足）
+- 0 号绿色扇区保留纯"0"；结果揭晓走已有结果浮层不改动
+- 仅存盘面标签相关 CSS 变量（--label-radius 等）按需保留或删除，不留死变量
+
+#### 根容器约束（index.html + css/wheel.css）
+
+- 根容器（.app 或等效）max-width: 480px + margin: 0 auto；body 暗色地面使桌面两侧呈现统一底色
+- 手机档视觉零变化（容器即满宽），before/after 截图对比确认
+
+#### 状态行分层（js/ui.js + js/main.js + index.html）
+
+- seed/rules 移入轨迹抽屉头部（溯源元数据区）；首屏状态行只留轮次 + 引导提示
+- 引导提示完整显示：≥12px、边距 ≥16px、文案长度控制在一行可容纳范围
+
+#### 对比度与数字排版（css/wheel.css）
+
+- 全部文字对比度 ≥4.5:1（"收敛轨迹" 4.3:1 等逐项提档）
+- 预算余额 / 筹码数字 / seed 加 font-variant-numeric: tabular-nums
+
+#### emoji 替换（index.html + js/ui.js + js/main.js）
+
+- 🍜 标题：内嵌 SVG 小碗（延续拟物内嵌 SVG 能力）；🎯 开转按钮：内嵌 SVG 旋转箭头或纯文字"开转"；🎲 轨迹文案：纯文字
+
+#### 落格反馈强化（css/wheel.css + js/ui.js）
+
+- 珠子落定后命中格金色高亮 ring + 约 300ms 脉冲（WAAPI，只动 transform/opacity 守性能红线）
+- 筹码/下注按钮 :active 按压态（scale 0.96 + 亮度变化）补齐
+
+#### 验证与基线（.temp/ + .gitignore + 文档）
+
+- 复检：inspect.mjs --app 重跑，目标非豁免 FAIL = 0（tiny-text/edge-text 摘帽、contrast/tabular 摘 WARN）+ critique 复评总分记录
+- 回归：run_all.py 全量 0 失败（UI 改动不碰核心层，回归保底）
+- before/after：inspect 输出 .taste-skill/after 与 before 并排；.gitignore 补 .taste-skill/（检测产物本地留档不入库）
+
+### 关联
+
+- 版本：V0.1.2.0（对应 PL003 全部改动一次提交）
+- 涉及模块：css/wheel.css、js/ui.js、js/main.js、index.html、.gitignore（补 .taste-skill/）、README/z.plan/x.progress（定版同步）
+- 不涉及：js/random.js、js/candidates.js、js/rules.js、js/bet.js、js/weights.js、js/wheel.js、js/converge.js（核心逻辑零改动）、config/（配置零改动）
